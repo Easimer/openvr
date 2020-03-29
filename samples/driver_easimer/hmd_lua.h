@@ -34,18 +34,16 @@ public:
 	const std::string& GetSerialNumber() const { return m_sSerialNumber; }
 
 private:
+	void Reload();
+	void Unload();
+
+private:
 	vr::TrackedDeviceIndex_t m_unObjectId;
 	vr::PropertyContainerHandle_t m_ulPropertyContainer;
 
 	std::string m_sSerialNumber;
 	std::string m_sModelNumber;
-
-	int32_t m_nWindowX;
-	int32_t m_nWindowY;
-	int32_t m_nWindowWidth;
-	int32_t m_nWindowHeight;
-	int32_t m_nRenderWidth;
-	int32_t m_nRenderHeight;
+	std::string m_sScriptPath;
 
 	vr::HmdQuaternion_t m_qCalibration;
 

@@ -3,6 +3,7 @@
 #pragma once
 #include <openvr_driver.h>
 #include <thread>
+#include "hmd_lua.h"
 
 //-----------------------------------------------------------------------------
 // Purpose: Watchdog driver that periodically wakes up the server
@@ -10,7 +11,6 @@
 
 class CWatchdogDriver : public vr::IVRWatchdogProvider {
 public:
-	CWatchdogDriver();
 	virtual vr::EVRInitError Init(vr::IVRDriverContext* pCtx) override;
 	virtual void Cleanup() override;
 
@@ -32,6 +32,8 @@ public:
 	virtual bool ShouldBlockStandbyMode() override { return true; }
 	virtual void EnterStandby() override;
 	virtual void LeaveStandby() override;
+	virtual void RunFrame() override;
 
 private:
+	CLuaHMDDriver* m_pHMD;
 };

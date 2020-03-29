@@ -1,5 +1,11 @@
 add_library(driver_easimer SHARED
 	driver_easimer.cpp
+	driver_easimer.h
+
+	driverlog.cpp
+	driverlog.h
+
+	steamcontroller.h
 )
 
 target_compile_definitions(driver_easimer PRIVATE DRIVER_SAMPLE_EXPORTS)

@@ -5,6 +5,9 @@ add_library(driver_easimer SHARED
 	driverlog.cpp
 	driverlog.h
 
+	hmd_lua.cpp
+	hmd_lua.h
+
 	steamcontroller.h
 )
 

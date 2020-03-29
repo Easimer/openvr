@@ -100,106 +100,6 @@ endif()
 # -----------------------------------------------------------------------------
 ## LIBRARIES ##
 
-## OpenGL / GLU
-find_package(OpenGL REQUIRED)
-
-## GLEW 1.11
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  # On GNU/Linux, glew can be found on the package manager. 
-  find_package(GLEW 1.11 REQUIRED)
-else()
-  # Otherwise, use the shipped binaries.
-  find_library(GLEW_LIBRARIES
-    NAMES
-      GLEW
-      glew32
-    PATHS
-      ${THIRDPARTY_DIR}/glew/glew-1.11.0/lib/Release
-    PATH_SUFFIXES
-      osx32
-      ${WINDOWS_PATH_SUFFIXES}
-  )
-  set(GLEW_INCLUDE_DIR ${THIRDPARTY_DIR}/glew/glew-1.11.0/include)
-endif()
-
-## SDL 2
-## osx32 and linux32 cmake can spot each others' .so and .a files, so keep them apart
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  foreach(lib ${SDL_REQUIRED_LIBRARIES})
-    find_library(${lib}_LIBRARY
-      NAMES
-        ${lib}
-      PATHS
-        ${THIRDPARTY_DIR}/sdl2-2.0.3/bin
-      PATH_SUFFIXES
-        osx32
-    )
-    list(APPEND SDL2_LIBRARIES ${${lib}_LIBRARY})
-  endforeach()
-else()
-  foreach(lib ${SDL_REQUIRED_LIBRARIES})
-    find_library(${lib}_LIBRARY
-      NAMES
-        ${lib}
-      PATHS
-        ${THIRDPARTY_DIR}/sdl2-2.0.3/bin
-      PATH_SUFFIXES
-        linux${PLATFORM}
-        ${WINDOWS_PATH_SUFFIXES}
-    )
-    list(APPEND SDL2_LIBRARIES ${${lib}_LIBRARY})
-  endforeach()
-endif()
-set(SDL2_INCLUDE_DIR ${THIRDPARTY_DIR}/sdl2-2.0.3/include)
-
-## Vulkan
-if(NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
-  find_library(VULKAN_LIBRARY
-      NAMES
-        vulkan-1
-        vulkan
-      PATHS
-        ${THIRDPARTY_DIR}/vulkan-1.0.49.0/lib
-      PATH_SUFFIXES
-        linux${PLATFORM}
-        ${WINDOWS_PATH_SUFFIXES}
-      NO_DEFAULT_PATH
-  )
-  set(VULKAN_INCLUDE_DIR ${THIRDPARTY_DIR}/vulkan-1.0.49.0/include)
-endif()
-
-
-## Qt 5
-## Important :
-## Remember to set CMAKE_PREFIX_PATH to Qt5 cmake modules path for your targeted platform
-## or set them here manually (not portable).
-# if(CMAKE_HOST_UNIX)
-#   list(APPEND CMAKE_PREFIX_PATH "/opt/Qt/5.6/gcc_64/lib/cmake")
-# else()
-#     if(${PLATFORM} MATCHES 64)
-#       set(suffix "_64")
-#     endif
-#   list(APPEND CMAKE_PREFIX_PATH "C:/Qt/5.6/msvc2013${suffix}/lib/cmake")
-# endif()
-
-# Set CMake to run moc automatically has needed.
-set(CMAKE_AUTOMOC ON)
-# Set CMake to handle *.ui generation to avoid using QT5_WRAP_UI() macro.
-set(CMAKE_AUTOUIC ON)
-# Add the build dir to include paths to find UI's headers.
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-# Find Qt5 libraries.
-foreach(module Core Gui Widgets)
-    find_package(Qt5 REQUIRED COMPONENTS ${module})
-    list(APPEND QT_INCLUDE_DIRS "${Qt5${module}_INCLUDE_DIRS}")
-    list(APPEND QT_LIBRARIES    "${Qt5${module}_LIBRARIES}")
-    list(APPEND QT_FLAGS        "${Qt5${module}_EXECUTABLE_COMPILE_FLAGS}")
-    list(APPEND QT_DEFINITIONS  "${Qt5${module}_DEFINITIONS}")
-endforeach()
-# Correct QT_FLAGS having semicolons, which break the compile step on POSIX
-list(REMOVE_DUPLICATES QT_FLAGS)
-
 ## OpenVR API path
 find_library(OPENVR_LIBRARIES
   NAMES
@@ -227,10 +127,6 @@ file(GLOB SHARED_SRC_FILES
 
 include_directories(
   .
-  ${OPENGL_INCLUDE_DIR}
-  ${GLEW_INCLUDE_DIR}
-  ${SDL2_INCLUDE_DIR}
-  ${QT_INCLUDE_DIRS}
   ${OPENVR_INCLUDE_DIR}
 )
 
@@ -241,12 +137,8 @@ endif()
 # -----------------------------------------------------------------------------
 ## SUBDIRECTORIES ##
 
-add_subdirectory(driver_sample)
-add_subdirectory(hellovr_opengl)
-if(NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
-  add_subdirectory(hellovr_vulkan)
-endif()
-add_subdirectory(helloworldoverlay)
-add_subdirectory(tracked_camera_openvr_sample)
+add_subdirectory(${THIRDPARTY_DIR}/steam_controller)
+add_subdirectory(${THIRDPARTY_DIR}/lua-5.3.5)
+add_subdirectory(driver_easimer)
 
 # -----------------------------------------------------------------------------

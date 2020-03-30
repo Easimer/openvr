@@ -60,12 +60,6 @@ vr::EVRInitError CServerDriver::Init(vr::IVRDriverContext* pDriverContext) {
 	m_pHMD = new CLuaHMDDriver(HMD_SCRIPT_PATH);
 	if (m_pHMD) {
 		VRServerDriverHost()->TrackedDeviceAdded(m_pHMD->GetSerialNumber().c_str(), vr::TrackedDeviceClass_HMD, m_pHMD);
-		DriverLog("Sending watchdog wakeup");
-		if (vr::VRWatchdogHost() != NULL) {
-			vr::VRWatchdogHost()->WatchdogWakeUp(vr::TrackedDeviceClass_HMD);
-		} else {
-			DriverLog("VRWatchdogHost is not present!");
-		}
 	}
 
 	return m_pHMD != NULL ? VRInitError_None : VRInitError_Driver_HmdDisplayNotFound;
@@ -76,6 +70,7 @@ void CServerDriver::Cleanup() {
 		delete m_pHMD;
 	}
 
+	CleanupDriverLog();
 	VR_CLEANUP_SERVER_DRIVER_CONTEXT();
 }
 
@@ -103,6 +98,4 @@ void CWatchdogDriver::Cleanup() {
 	DriverLog("Joining watchdog thread");
 	m_watchdogThread.join();
 	DriverLog("Joined watchdog thread");
-
-	CleanupDriverLog();
 }

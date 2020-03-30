@@ -2,8 +2,14 @@
 
 #pragma once
 #include <openvr_driver.h>
+#include "CSteamController.h"
 
 struct lua_State;
+
+enum HandlerType_t {
+	k_unHandlerType_SteamController = 0,
+	k_unHandlerType_Max
+};
 
 //-----------------------------------------------------------------------------
 // Purpose: HMD driver that calls back to a Lua script
@@ -33,7 +39,11 @@ public:
 	void RunFrame();
 	const std::string& GetSerialNumber() const { return m_sSerialNumber; }
 
+	class BaseLuaInterface;
+	void SetHandler(HandlerType_t type, int refHandler);
+
 private:
+
 	void Reload();
 	void Unload();
 
@@ -48,4 +58,10 @@ private:
 	vr::HmdQuaternion_t m_qCalibration;
 
 	lua_State* m_pLua;
+
+	// References to handlers' method table
+	int m_arefHandlers[k_unHandlerType_Max];
+
+	// Lua Handler for SteamController
+	BaseLuaInterface* m_pLuaSteamController;
 };

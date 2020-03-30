@@ -1,6 +1,9 @@
 // === Copyright (c) 2017-2020 easimer.net. All rights reserved. ===
 
-#include "steam_controller/steamcontroller.h"
+#pragma once
+extern "C" {
+#include <steamcontroller.h>
+}
 
 class CSteamController {
 public:

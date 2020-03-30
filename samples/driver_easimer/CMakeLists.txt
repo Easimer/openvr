@@ -8,7 +8,7 @@ add_library(driver_easimer SHARED
 	hmd_lua.cpp
 	hmd_lua.h
 
-	steamcontroller.h
+	CSteamController.h
 )
 
 target_compile_definitions(driver_easimer PRIVATE DRIVER_SAMPLE_EXPORTS)

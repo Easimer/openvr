@@ -7,7 +7,7 @@ set(SRC_SC
 )
 
 add_library(steam_controller STATIC ${SRC_SC})
-target_compile_definitions(steam_controller PRIVATE STEAMCONTROLLER_BUILDING_LIBRARY)
+target_compile_definitions(steam_controller PUBLIC STEAMCONTROLLER_BUILDING_LIBRARY)
 target_include_directories(steam_controller PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(WIN32)

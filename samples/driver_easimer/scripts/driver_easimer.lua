@@ -1,4 +1,5 @@
 TrackedDeviceServerDriver = {}
+VRDisplayComponent = {}
 VRLeftEye	= 0
 VRRightEye	= 1
 
@@ -49,7 +50,15 @@ function Quat:inverse()
 end
 
 function TrackedDeviceServerDriver:OnInit()
-	DriverLog("Initializing HMD!");
+	DriverLog("TrackedDeviceServerDriver:OnInit")
+end
+
+function TrackedDeviceServerDriver:OnShutdown()
+	DriverLog("TrackedDeviceServerDriver:OnShutdown")
+end
+
+function VRDisplayComponent:OnInit()
+	DriverLog("VRDisplayComponent:OnInit")
 	self.nRenderWidth = 800
 	self.nRenderHeight = 900
 	self.nWindowWidth = 1600
@@ -58,12 +67,12 @@ function TrackedDeviceServerDriver:OnInit()
 	self.nWindowY = 100
 end
 
-function TrackedDeviceServerDriver:OnShutdown()
-	DriverLog("Cleaning up HMD!");
+function VRDisplayComponent:OnShutdown()
+	DriverLog("VRDisplayComponent:OnShutdown")
 end
 
 -- Returns a tuple of (WindowX, WindowY, WindowW, WindowH)
-function TrackedDeviceServerDriver:GetWindowBounds()
+function VRDisplayComponent:GetWindowBounds()
 	return self.nWindowX, self.nWindowY, self.nWindowWidth, self.nWindowHeight
 end
 
@@ -77,16 +86,13 @@ function TrackedDeviceServerDriver:EnterStandby()
 	DriverLog("Entering standby")
 end
 
-function TrackedDeviceServerDriver:RunFrame()
-end
-
 -- Returns a tuple of (RenderW, RenderH)
-function TrackedDeviceServerDriver:GetRecommendedRenderTargetSize()
+function VRDisplayComponent:GetRecommendedRenderTargetSize()
 	return self.nRenderWidth, self.nRenderHeight
 end
 
 -- Returns a tuple of (WindowX, WindowY, WindowW, WindowH)
-function TrackedDeviceServerDriver:GetEyeOutputViewport(eye)
+function VRDisplayComponent:GetEyeOutputViewport(eye)
 	local y = 0
 	local width = self.nWindowWidth / 2
 	local height = self.nWindowHeight
@@ -113,4 +119,39 @@ function TrackedDeviceServerDriver:GetPose()
 	ret.vecWorldFromDriverTranslation = {0, 0, 0}
 
 	return ret
+end
+
+SteamController = {}
+
+function SteamController:OnInit() end
+function SteamController:OnShutdown() end
+function SteamController:Create()
+	local ret = {}
+	setmetatable(ret, self)
+	self.__index = self
+	return ret
+end
+
+function SteamController:OnConnect(handle)
+	DriverLog("SteamController:OnConnect")
+	self.handle = handle
+	DriverLog("Handle set to " .. tostring(self.handle))
+	self:Rumble(self.handle)
+	DriverLog("SteamController:Rumble")
+end
+
+function SteamController:OnUpdate()
+end
+
+function SteamController:OnDisconnect()
+	DriverLog("SteamController " .. self.handle .. " has disconnected!")
+	self.handle = nil
+end
+
+function SteamController:GetControllerHandle()
+	return self.handle
+end
+
+function API_RegisterHandlers(hHMD)
+	RegisterHandler(hHMD, "SteamController", SteamController)
 end

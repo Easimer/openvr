@@ -541,6 +541,8 @@ DistortionCoordinates_t CLuaHMDDriver::ComputeDistortion(EVREye eEye, float fU, 
 }
 
 void CLuaHMDDriver::RunFrame() {
+    vr::VREvent_t vrEvent;
+
     if (m_pLuaSteamController != NULL) {
         auto pSC = (ISteamController*)m_pLuaSteamController;
         if (pSC) {
@@ -551,6 +553,13 @@ void CLuaHMDDriver::RunFrame() {
             }
         } else {
             DriverLog("ISteamController* conversion failed?");
+        }
+    }
+
+    while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent))) {
+        if (vrEvent.eventType == VREvent_SeatedZeroPoseReset) {
+            DriverLog("SeatedZeroPoseReset!");
+            DO_SIMPLE_CALLBACK(TABLE_TRACKDEV, "OnSeatedZeroPoseReset");
         }
     }
 

@@ -11,36 +11,36 @@ TrackingResults_Running_OutOfRange		= 201
 TrackingResult_Fallback_RotationOnly	= 300
 
 Quat = {}
-Quat.mt = {}
-Quat.mt.__mul = function(lhs, rhs)
+Quat.__mul = function(lhs, rhs)
 	local w = lhs.w * rhs.w - lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z
 	local x = lhs.w * rhs.x + lhs.x * rhs.w + lhs.y * rhs.z - lhs.z * rhs.y
 	local y = lhs.w * rhs.y + lhs.y * rhs.w + lhs.z * rhs.x - lhs.x * rhs.z
 	local z = lhs.w * rhs.z + lhs.z * rhs.w + lhs.x * rhs.y - lhs.y * rhs.x
 
-	return Quat.new(w, x, y, z)
+	return Quat:new(w, x, y, z)
 end
 
-function Quat.identity()
-	return Quat.new(1, 0, 0, 0)
+function Quat:identity()
+	return Quat:new(1, 0, 0, 0)
 end
 
-function Quat.new(w, x, y, z)
+function Quat:new(w, x, y, z)
 	local ret = {}
 	ret.w = w
 	ret.x = x
 	ret.y = y
 	ret.z = z
-	setmetatable(ret, Quat.mt)
+	self.__index = self
+	setmetatable(ret, self)
 	return ret
 end
 
 function Quat:conjugate()
-	return Quat.new(self.w, -self.x, -self.y, -self.z)
+	return Quat:new(self.w, -self.x, -self.y, -self.z)
 end
 
 function Quat:inverse()
-	local qa = self.conjugate()
+	local qa = self:conjugate()
 	local len = self.w * self.w + self.x * self.x + self.y * self.y + self.z * self.z
 	qa.w = qa.w / len
 	qa.x = qa.x / len
@@ -49,7 +49,8 @@ function Quat:inverse()
 	return qa
 end
 
-lastOrientationUpdate = Quat.identity()
+lastOrientationUpdate = Quat:identity()
+calibrationData = Quat:identity()
 
 function TrackedDeviceServerDriver:OnInit()
 	DriverLog("TrackedDeviceServerDriver:OnInit")
@@ -61,8 +62,8 @@ end
 
 function VRDisplayComponent:OnInit()
 	DriverLog("VRDisplayComponent:OnInit")
-	self.nRenderWidth = 800
-	self.nRenderHeight = 900
+	self.nRenderWidth = 1000 
+	self.nRenderHeight = 1100
 	self.nWindowWidth = 1600
 	self.nWindowHeight = 900
 	self.nWindowX = 100
@@ -96,14 +97,15 @@ end
 -- Returns a tuple of (WindowX, WindowY, WindowW, WindowH)
 function VRDisplayComponent:GetEyeOutputViewport(eye)
 	local y = 0
-	local width = self.nWindowWidth / 2
-	local height = self.nWindowHeight
+	local width = 0
+	local height = 0
 	local x = 0
 
-	if eye == VRLeftEye then
+	if eye == VRRightEye then
 		x = 0
-	else
-		x = self.nWindowWidth / 2
+		y = 0
+		width = self.nWindowWidth
+		height = self.nWindowHeight
 	end
 
 	return x, y, width, height
@@ -115,12 +117,18 @@ function TrackedDeviceServerDriver:GetPose()
 	ret.result = TrackingResults_Running_OK 
 	ret.deviceIsConnected = true
 
-	ret.qWorldFromDriverRotation = Quat.identity()
-	ret.qDriverFromHeadRotation = Quat.identity()
-	ret.qRotation = lastOrientationUpdate
+	ret.qWorldFromDriverRotation = Quat:identity()
+	ret.qDriverFromHeadRotation = Quat:identity()
+	ret.qRotation = lastOrientationUpdate * calibrationData
 	ret.vecWorldFromDriverTranslation = {0, 0, 0}
 
 	return ret
+end
+
+function TrackedDeviceServerDriver:OnSeatedZeroPoseReset()
+	calibrationData = lastOrientationUpdate:inverse()
+	DriverLog("Recalibrated!")
+	DriverLog("New inverse transform: " .. calibrationData.w .. " " .. calibrationData.x .. " " .. calibrationData.y .. " " .. calibrationData.z)
 end
 
 SteamController = {}
@@ -144,7 +152,7 @@ end
 
 function SteamController:OnUpdate(ev)
 	local q = ev.orientation
-	lastOrientationUpdate = Quat.new(q.w, q.x, q.y, q.z)
+	lastOrientationUpdate = Quat:new(q.w, q.x, q.y, q.z)
 end
 
 function SteamController:OnDisconnect()

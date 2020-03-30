@@ -63,5 +63,5 @@ private:
 	int m_arefHandlers[k_unHandlerType_Max];
 
 	// Lua Handler for SteamController
-	BaseLuaInterface* m_pLuaSteamController;
+	void* m_pLuaSteamController;
 };

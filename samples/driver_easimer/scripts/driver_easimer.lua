@@ -49,6 +49,8 @@ function Quat:inverse()
 	return qa
 end
 
+lastOrientationUpdate = Quat.identity()
+
 function TrackedDeviceServerDriver:OnInit()
 	DriverLog("TrackedDeviceServerDriver:OnInit")
 end
@@ -110,12 +112,12 @@ end
 function TrackedDeviceServerDriver:GetPose()
 	local ret = {}
 	ret.poseIsValid = true
-	ret.result = TrackingResult_Calibrating_InProgress
+	ret.result = TrackingResults_Running_OK 
 	ret.deviceIsConnected = true
 
 	ret.qWorldFromDriverRotation = Quat.identity()
 	ret.qDriverFromHeadRotation = Quat.identity()
-	ret.qRotation = Quat.identity()
+	ret.qRotation = lastOrientationUpdate
 	ret.vecWorldFromDriverTranslation = {0, 0, 0}
 
 	return ret
@@ -140,7 +142,9 @@ function SteamController:OnConnect(handle)
 	DriverLog("SteamController:Rumble")
 end
 
-function SteamController:OnUpdate()
+function SteamController:OnUpdate(ev)
+	local q = ev.orientation
+	lastOrientationUpdate = Quat.new(q.w, q.x, q.y, q.z)
 end
 
 function SteamController:OnDisconnect()

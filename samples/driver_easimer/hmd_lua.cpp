@@ -4,7 +4,6 @@
 #include "driverlog.h"
 
 extern "C" {
-#include <steamcontroller.h>
 #include "lauxlib.h"
 #include "lua.h"
 #include "lualib.h"
@@ -17,6 +16,120 @@ using namespace vr;
 #define TABLE_VRDISP "VRDisplayComponent"
 #define TABLE_TRACKDEV "TrackedDeviceServerDriver"
 #define TABLE_CONTROL "SteamController"
+
+// Convert a HmdQuaternion_t into a Lua table
+// If the operation is successful, the top of the stack contains
+// the table and true is returned.
+// On failure the stack remains balanced and false is returned.
+// [-0, +1, e]
+static bool ToLuaTable(lua_State* L, const vr::HmdQuaternion_t& ev) {
+    bool ret = false;
+
+    if (L) {
+        lua_newtable(L); // +1
+        lua_pushstring(L, "w"); lua_pushnumber(L, ev.w); lua_settable(L, -3);
+        lua_pushstring(L, "x"); lua_pushnumber(L, ev.x); lua_settable(L, -3);
+        lua_pushstring(L, "y"); lua_pushnumber(L, ev.y); lua_settable(L, -3);
+        lua_pushstring(L, "z"); lua_pushnumber(L, ev.z); lua_settable(L, -3);
+        ret = true;
+    }
+
+    return ret;
+}
+
+// Convert a SteamControllerUpdateEvent into a Lua table
+// If the operation is successful, the top of the stack contains
+// the table and true is returned.
+// On failure the stack remains balanced and false is returned.
+// [-0, +1, e]
+static bool ToLuaTable(lua_State* L, const SteamControllerUpdateEvent& ev) {
+    bool ret = false;
+
+    if (L) {
+        lua_newtable(L); // +1
+        auto x = ev.orientation.x / 32767.0f;
+        auto y = ev.orientation.y / 32767.0f;
+        auto z = ev.orientation.z / 32767.0f;
+        auto w = 1.0f - sqrtf(x * x + y * y + z * z);
+        auto orientation = HmdQuaternion_t{ w, x, y, z };
+        lua_pushstring(L, "orientation"); // +1
+        if (ToLuaTable(L, orientation)) { // +1
+            lua_settable(L, -3); // -2
+            ret = true;
+        } else {
+            lua_pop(L, 2); // -2
+        }
+    }
+
+    return ret;
+}
+
+#define X2(x) #x
+#define X(x) X2(x)
+
+#define TABLE_GET_T(cont, key, field, conv, coercion) { \
+    lua_pushstring(L, X(key));              \
+    lua_gettable(L, -1);                    \
+    cont.field = coercion conv(L, -1);      \
+    lua_pop(L, 1);                          \
+}
+
+#define TABLE_MAP_T(cont, key, conv, coercion) TABLE_GET_T(cont, key, key, conv, coercion)
+
+#define TABLE_MAP_NUMBER(cont, key) TABLE_MAP_T(cont, key, lua_tonumber)
+#define TABLE_MAP_BOOL(cont, key) TABLE_MAP_T(cont, key, lua_toboolean)
+#define TABLE_MAP_INT(cont, key) TABLE_MAP_T(cont, key, lua_tointeger)
+#define TABLE_MAP_ENUM(cont, key, type) TABLE_MAP_T(cont, key, lua_tointeger, (type))
+
+#define TABLE_GET_TRIV(cont, key, field, type) { \
+    lua_pushstring(L, X(key));                   \
+    lua_gettable(L, -1);                         \
+    FromLuaTable(L, cont.field);                 \
+}
+#define TABLE_MAP_TRIV(cont, key) TABLE_GET_TRIV(cont, key, key)
+
+// Convert the Lua table at the top of the stack to a HMD quat
+// Returns true on success and false on failure.
+// Pops the table from the stack.
+// [-1, +0, -]
+static bool FromLuaTable(lua_State* L, vr::HmdQuaternion_t& q) {
+    bool ret = false;
+    
+    if (L) {
+        TABLE_MAP_NUMBER(q, w);
+        TABLE_MAP_NUMBER(q, x);
+        TABLE_MAP_NUMBER(q, y);
+        TABLE_MAP_NUMBER(q, z);
+    }
+
+    lua_pop(L, 1);
+    return ret;
+}
+
+// Convert the Lua table at the top of the stack to driver pose
+// Returns true on success and false on failure.
+// Pops the table from the stack.
+// [-1, +0, -]
+static bool FromLuaTable(lua_State* L, DriverPose_t& pose) {
+    bool ret = false;
+    pose = { 0 };
+
+    if (L) {
+        TABLE_MAP_BOOL(pose, poseIsValid);
+        TABLE_MAP_BOOL(pose, deviceIsConnected);
+        TABLE_MAP_ENUM(pose, result, ETrackingResult);
+
+        TABLE_MAP_TRIV(pose, qWorldFromDriverRotation);
+        TABLE_MAP_TRIV(pose, qDriverFromHeadRotation);
+        TABLE_MAP_TRIV(pose, qRotation);
+
+        ret = true;
+    }
+
+    lua_pop(L, 1);
+
+    return ret;
+}
 
 class CLuaHMDDriver::BaseLuaInterface {
 public:
@@ -33,10 +146,8 @@ public:
         PushMethodTable();
         lua_call(L, 1, 1);
 
-        DriverLog("new: luaL_ref");
         m_nRefInstance = luaL_ref(L, LUA_REGISTRYINDEX);
         if (m_nRefInstance != LUA_NOREF && m_nRefInstance != LUA_REFNIL) {
-            DriverLog("new: instance reference = %d", m_nRefInstance);
             OnInit();
         } else {
             DriverLog("new: instance reference is %d, a NOREF or REFNIL!", m_nRefInstance);
@@ -60,15 +171,10 @@ public:
     // Call OnInit on the handler instance
     // [-0, +0, -]
     void OnInit() {
-        DriverLog("OnInit: PushMethod");
         PushMethod("OnInit");
-        DriverLog("OnInit: PushInstance");
         PushInstance();
-        DriverLog("OnInit: call");
         lua_call(L, 1, 0);
-        DriverLog("OnInit: pop");
         lua_pop(L, 1);
-        DriverLog("new: returned from OnInit");
     }
 
     virtual ~BaseLuaInterface() {
@@ -139,12 +245,13 @@ static int Lua_ISteamController_Rumble(lua_State* L) {
     return 0;
 }
 
-class ISteamController : public CLuaHMDDriver::BaseLuaInterface {
+class ISteamController : public CLuaHMDDriver::BaseLuaInterface, public CSteamController {
 public:
-    ISteamController(lua_State* L, int nRefMethodTable, CSteamController* pSC) :
+    ISteamController(lua_State* L, int nRefMethodTable, SteamControllerDeviceEnum* it) :
         CLuaHMDDriver::BaseLuaInterface(L, nRefMethodTable),
-        m_pSC(pSC) {
-        m_pSC->Configure(STEAMCONTROLLER_CONFIG_SEND_ORIENTATION);
+        CSteamController::CSteamController(it),
+        m_bReload(false) {
+        Configure(STEAMCONTROLLER_CONFIG_SEND_ORIENTATION);
         DriverLog("Adding Rumble method");
         AddMethod("Rumble", Lua_ISteamController_Rumble);
         DriverLog("Calling OnConnect");
@@ -152,7 +259,24 @@ public:
     }
 
     virtual ~ISteamController() {
-        delete m_pSC;
+    }
+
+    virtual void OnUpdate(const SteamControllerUpdateEvent& ev) override {
+        if (ev.buttons & STEAMCONTROLLER_BUTTON_HOME) {
+            // Reload script
+            m_bReload = true;
+            DriverLog("User requested script reload by pressing Home");
+        } else {
+            // Propagate event to Lua script
+            PushMethod("OnUpdate"); // +2
+            PushInstance(); // +1
+            if (ToLuaTable(L, ev)) { // +1
+                lua_call(L, 2, 0); // -3
+                lua_pop(L, 1); // -1
+            } else {
+                lua_pop(L, 3);
+            }
+        }
     }
 
     virtual bool CheckMethodTable() override {
@@ -163,17 +287,22 @@ public:
             IsMethodPresent("GetControllerHandle");
     }
 
+    bool UserRequestedReload() {
+        auto ret = m_bReload;
+        m_bReload = false;
+        return ret;
+    }
+
 protected:
     void OnConnect() {
         PushMethod("OnConnect"); // +2
         PushInstance(); // +1
-        lua_pushlightuserdata(L, m_pSC); // +1
+        lua_pushlightuserdata(L, this); // +1
         lua_call(L, 2, 0); // -3
         lua_pop(L, 1); // -1
     }
 
-private:
-    CSteamController* m_pSC;
+    bool m_bReload;
 };
 
 static int Lua_AtPanic(lua_State* L) {
@@ -247,7 +376,8 @@ CLuaHMDDriver::CLuaHMDDriver(const char* pszPath) :
     m_sSerialNumber("SN00000001"),
     m_sModelNumber("v1.hmd.vr.easimer.net"),
     m_sScriptPath(pszPath),
-    m_pLua(NULL) {
+    m_pLua(NULL),
+    m_pLuaSteamController(NULL) {
     for (int i = 0; i < k_unHandlerType_Max; i++) {
         m_arefHandlers[i] = LUA_NOREF;
     }
@@ -295,22 +425,6 @@ EVRInitError CLuaHMDDriver::Activate(uint32_t unObjectId) {
         }
         lua_pop(m_pLua, 1);
 
-        // Find first Steam Controller
-        DriverLog("Discovering Steam Controllers");
-        auto it = SteamController_EnumControllerDevices();
-        if (it != NULL) {
-            DriverLog("Found a Steam Controller");
-            auto sc = new CSteamController(it);
-            if (sc) {
-                DriverLog("Created CSteamController instance");
-                this->m_pLuaSteamController = new ISteamController(m_pLua, m_arefHandlers[k_unHandlerType_SteamController], sc);
-                DriverLog("Created a SteamController handler");
-            }
-
-            do {
-                it = SteamController_NextControllerDevice(it);
-            } while (it != NULL);
-        }
     }
 
     return ret;
@@ -340,16 +454,20 @@ void CLuaHMDDriver::DebugRequest(const char* pchRequest, char* pchResponseBuffer
 }
 
 vr::DriverPose_t CLuaHMDDriver::GetPose() {
-    DriverPose_t pose = { 0 };
-    pose.poseIsValid = false;
-    pose.result = TrackingResult_Calibrating_InProgress;
-    pose.deviceIsConnected = true;
+    if (m_pLua != NULL) {
+        DriverPose_t pose = { 0 };
+        PushTableFunction(m_pLua, TABLE_TRACKDEV, "GetPose");
+        lua_getglobal(m_pLua, TABLE_TRACKDEV);
+        lua_call(m_pLua, 1, 1);
 
-    pose.qWorldFromDriverRotation = { 1, 0, 0, 0 };
-    pose.qDriverFromHeadRotation = { 1, 0, 0, 0 };
-    pose.qRotation = { 1, 0, 0, 0 };
+        if (FromLuaTable(m_pLua, pose)) {
+            return pose;
+        } else {
+            return { 0 };
+        }
+    }
 
-    return pose;
+    return { 0 };
 }
 
 void CLuaHMDDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
@@ -420,7 +538,18 @@ DistortionCoordinates_t CLuaHMDDriver::ComputeDistortion(EVREye eEye, float fU, 
 }
 
 void CLuaHMDDriver::RunFrame() {
-    // TODO(danielm): steam controller event pump
+    if (m_pLuaSteamController != NULL) {
+        auto pSC = (ISteamController*)m_pLuaSteamController;
+        if (pSC) {
+            pSC->RunFrames();
+            if (pSC->UserRequestedReload()) {
+                DriverLog("User requested script reload through Steam Controller");
+                Reload();
+            }
+        } else {
+            DriverLog("ISteamController* conversion failed?");
+        }
+    }
 }
 
 void CLuaHMDDriver::SetHandler(HandlerType_t type, int refHandler) {
@@ -429,9 +558,17 @@ void CLuaHMDDriver::SetHandler(HandlerType_t type, int refHandler) {
 }
 
 void CLuaHMDDriver::Unload() {
+    DriverLog("Unloading script...");
+    if (m_pLuaSteamController != NULL) {
+        delete m_pLuaSteamController;
+        m_pLuaSteamController = NULL;
+    }
     if (m_pLua != NULL) {
         DO_SIMPLE_CALLBACK(TABLE_VRDISP, "OnShutdown");
         DO_SIMPLE_CALLBACK(TABLE_TRACKDEV, "OnShutdown");
+
+        lua_close(m_pLua);
+        m_pLua = NULL;
     }
 
     for (int i = 0; i < k_unHandlerType_Max; i++) {
@@ -440,10 +577,12 @@ void CLuaHMDDriver::Unload() {
 }
 
 void CLuaHMDDriver::Reload() {
-    DriverLog("Reloading script...");
     Unload();
+
+    DriverLog("Creating Lua state");
     m_pLua = luaL_newstate();
     if (m_pLua) {
+        DriverLog("Loading script...");
         if (InitializeLuaState(m_pLua, m_sScriptPath)) {
             DriverLog("Script has been reloaded!");
 
@@ -456,6 +595,18 @@ void CLuaHMDDriver::Reload() {
 
             DO_SIMPLE_CALLBACK(TABLE_TRACKDEV, "OnInit");
             DO_SIMPLE_CALLBACK(TABLE_VRDISP, "OnInit");
+
+            // Find first Steam Controller
+            DriverLog("Discovering Steam Controllers");
+            auto it = SteamController_EnumControllerDevices();
+            if (it != NULL) {
+                DriverLog("Found a Steam Controller");
+                this->m_pLuaSteamController = new ISteamController(m_pLua, m_arefHandlers[k_unHandlerType_SteamController], it);
+
+                do {
+                    it = SteamController_NextControllerDevice(it);
+                } while (it != NULL);
+            }
         } else {
             lua_close(m_pLua);
             m_pLua = NULL;

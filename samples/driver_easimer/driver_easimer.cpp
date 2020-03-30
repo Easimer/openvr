@@ -79,7 +79,9 @@ void CServerDriver::EnterStandby() {}
 void CServerDriver::LeaveStandby() {}
 
 void CServerDriver::RunFrame() {
-
+	if (m_pHMD != NULL) {
+		m_pHMD->RunFrame();
+	}
 }
 
 vr::EVRInitError CWatchdogDriver::Init(vr::IVRDriverContext* pDriverContext) {

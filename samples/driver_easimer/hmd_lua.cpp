@@ -69,7 +69,7 @@ static bool ToLuaTable(lua_State* L, const SteamControllerUpdateEvent& ev) {
 
 #define TABLE_GET_T(cont, key, field, conv, coercion) { \
     lua_pushstring(L, X(key));              \
-    lua_gettable(L, -1);                    \
+    lua_gettable(L, -2);                    \
     cont.field = coercion conv(L, -1);      \
     lua_pop(L, 1);                          \
 }
@@ -83,7 +83,7 @@ static bool ToLuaTable(lua_State* L, const SteamControllerUpdateEvent& ev) {
 
 #define TABLE_GET_TRIV(cont, key, field, type) { \
     lua_pushstring(L, X(key));                   \
-    lua_gettable(L, -1);                         \
+    lua_gettable(L, -2);                         \
     FromLuaTable(L, cont.field);                 \
 }
 #define TABLE_MAP_TRIV(cont, key) TABLE_GET_TRIV(cont, key, key)
@@ -461,6 +461,9 @@ vr::DriverPose_t CLuaHMDDriver::GetPose() {
         lua_call(m_pLua, 1, 1);
 
         if (FromLuaTable(m_pLua, pose)) {
+            if (pose.result != TrackingResult_Running_OK) {
+                DriverLog("Tracking result is %d!", pose.result);
+            }
             return pose;
         } else {
             return { 0 };
@@ -550,6 +553,8 @@ void CLuaHMDDriver::RunFrame() {
             DriverLog("ISteamController* conversion failed?");
         }
     }
+
+    VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, GetPose(), sizeof(DriverPose_t));
 }
 
 void CLuaHMDDriver::SetHandler(HandlerType_t type, int refHandler) {
